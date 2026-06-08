@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "reform_barber (local)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "reform_barber",
+      "Username": "postgres",
+      "Password": "postgres",
+      "SSLMode": "disable",
+      "PassFile": "/tmp/pgpassfile"
+    }
+  }
+}

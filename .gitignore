@@ -1,0 +1,4 @@
+.tiltbuild/
+tilt_modules/
+uploads/
+.env
