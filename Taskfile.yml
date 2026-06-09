@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+# env pass
+dotenv:
+  - .env
+
+tasks:
+  tilt:
+    desc: Starts local development
+    cmds:
+      - tilt up && tilt down
+    silent: true
+  
+  migrate-up:
+    desc: Runs database up migrations via Goose
+    cmds:
+      - goose -dir $MIGRATION_DIR up
+  
+  migrate-down:
+    desc: Runs database down migrations via Goose
+    cmds:
+      - goose -dir $MIGRATION_DIR down
+
+  migrate-check:
+    desc: Checks migration status via Goose
+    cmds:
+      - goose -dir $MIGRATION_DIR status
