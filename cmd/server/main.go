@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"github.com/reform-barber/api/internal/handler"
 	"github.com/reform-barber/api/internal/middleware"
 	"github.com/reform-barber/api/internal/notify"
-	"github.com/reform-barber/api/internal/storage"
 	"github.com/rs/zerolog"
 
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -32,8 +30,6 @@ func main() {
 
 	pool := initDatabaseConn(ctx)
 	defer pool.Close()
-
-	migrateDatabase(pool)
 
 	store := buildStore()
 
@@ -118,7 +114,7 @@ func main() {
 		})
 	})
 
-	port := os.Getenv("PORT")
+	port := os.Getenv("API_PORT")
 	if port == "" {
 		port = "8080"
 	}
@@ -135,31 +131,6 @@ func exitOnErr(err error) {
 		logger.Error().Err(err).Msg(err.Error())
 		os.Exit(1)
 	}
-	return
-}
-
-func buildStore() storage.Store {
-	backend := os.Getenv("STORAGE_BACKEND")
-	if backend == "r2" {
-		return storage.NewR2Store(
-			mustEnv("R2_ACCOUNT_ID"),
-			mustEnv("R2_ACCESS_KEY"),
-			mustEnv("R2_SECRET_KEY"),
-			mustEnv("R2_BUCKET"),
-			mustEnv("R2_PUBLIC_URL"),
-		)
-	}
-	uploadsDir := os.Getenv("UPLOADS_DIR")
-	if uploadsDir == "" {
-		uploadsDir = "./uploads"
-	}
-	baseURL := fmt.Sprintf("http://localhost:%s/uploads", func() string {
-		if p := os.Getenv("PORT"); p != "" {
-			return p
-		}
-		return "8080"
-	}())
-	return storage.NewLocalStore(uploadsDir, baseURL)
 }
 
 func buildNotifier() notify.Notifier {
