@@ -2,128 +2,59 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
-	"github.com/reform-barber/api/internal/handler"
-	"github.com/reform-barber/api/internal/middleware"
-	"github.com/reform-barber/api/internal/notify"
 	"github.com/rs/zerolog"
-
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
-var (
-	err    error
-	logger zerolog.Logger
-)
+var logger zerolog.Logger
 
 func main() {
 	_ = godotenv.Load()
 	ctx := context.Background()
 
-	logger, err = initLogger(mustEnv("LOG_LEVEL"), mustEnv("DEV_MODE"))
+	devMode, err := strconv.ParseBool(mustEnv("DEV_MODE"))
+	if err != nil {
+		devMode = false // default to dev mode false if parsing fails
+	}
+
+	logger, err = initLogger(mustEnv("LOG_LEVEL"), devMode)
 	exitOnErr(err)
 
 	pool := initDatabaseConn(ctx)
 	defer pool.Close()
 
-	store := buildStore()
+	store := buildStore(devMode)
 
 	notifier := buildNotifier()
 
-	// Handlers
-	jwtSecret := mustEnv("JWT_SECRET")
-	authH := handler.NewAuthHandler(pool, jwtSecret)
-	barbersH := handler.NewBarbersHandler(pool)
-	servicesH := handler.NewServicesHandler(pool)
-	productsH := handler.NewProductsHandler(pool)
-	bookingsH := handler.NewBookingsHandler(pool, notifier)
-	mediaH := handler.NewMediaHandler(pool, store)
+	// start chi router
+	router := initRouter(devMode, pool, store, notifier)
 
-	authn := middleware.Authenticate(jwtSecret)
-	requireBarber := middleware.RequireRole("barber", "founder")
-	requireFounder := middleware.RequireRole("founder")
+	startSever(router)
+}
 
-	r := chi.NewRouter()
-	r.Use(chimiddleware.Recoverer)
-	r.Use(middleware.Logger)
-	r.Use(chimiddleware.RequestID)
-
-	// Serve local uploads in dev
-	if os.Getenv("STORAGE_BACKEND") == "local" || os.Getenv("STORAGE_BACKEND") == "" {
-		uploadsDir := os.Getenv("UPLOADS_DIR")
-		if uploadsDir == "" {
-			uploadsDir = "./uploads"
-		}
-		r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsDir))))
-	}
-
-	r.Route("/api", func(r chi.Router) {
-		// Public
-		r.Get("/barbers", barbersH.List)
-		r.Get("/services", servicesH.List)
-		r.Get("/products", productsH.List)
-		r.Get("/availability", handler.GetAvailability(pool))
-		r.Get("/media/carousel", mediaH.ListCarousel)
-		r.Get("/media/gallery", mediaH.ListGallery)
-
-		// Auth
-		r.Post("/auth/register", authH.Register)
-		r.Post("/auth/login", authH.Login)
-		r.Post("/auth/refresh", authH.Refresh)
-		r.Post("/auth/logout", authH.Logout)
-
-		// Authenticated
-		r.Group(func(r chi.Router) {
-			r.Use(authn)
-			r.Get("/me", authH.Me)
-			r.Post("/bookings", bookingsH.Create)
-			r.Get("/me/bookings", bookingsH.ListMine)
-			r.Post("/me/bookings/{id}/cancel", bookingsH.Cancel)
-
-			// Barber diary
-			r.Group(func(r chi.Router) {
-				r.Use(requireBarber)
-				r.Get("/barber/appointments", bookingsH.BarberAppointments)
-			})
-
-			// Founder admin
-			r.Group(func(r chi.Router) {
-				r.Use(requireFounder)
-				r.Get("/admin/bookings", bookingsH.AdminListBookings)
-
-				r.Put("/admin/barbers/{id}", barbersH.Update)
-				r.Post("/admin/barbers/{id}/photo", mediaH.UploadBarberPhoto)
-
-				r.Post("/admin/services", servicesH.Create)
-				r.Put("/admin/services/{id}", servicesH.Update)
-
-				r.Post("/admin/products", productsH.Create)
-				r.Put("/admin/products/{id}", productsH.Update)
-				r.Post("/admin/products/{id}/image", mediaH.UploadProductImage)
-
-				r.Post("/admin/media/carousel", mediaH.UploadCarousel)
-				r.Post("/admin/media/gallery", mediaH.UploadGallery)
-				r.Delete("/admin/media/{id}", mediaH.Delete)
-				r.Patch("/admin/media/{id}/order", mediaH.UpdateOrder)
-			})
-		})
-	})
-
-	port := os.Getenv("API_PORT")
-	if port == "" {
-		port = "8080"
-	}
+func startSever(r *chi.Mux) {
+	port := mustEnv("API_PORT")
 	addr := ":" + port
-	slog.Info("server starting", "addr", addr)
+
+	logger.Info().Msgf("server starting on %s", addr)
 	if err := http.ListenAndServe(addr, r); err != nil {
-		slog.Error("server error", "err", err)
+		exitOnErr(err)
+	}
+}
+
+func mustEnv(key string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		logger.Error().Msgf("required env var %s not set", key)
 		os.Exit(1)
 	}
+	return v
 }
 
 func exitOnErr(err error) {
@@ -131,39 +62,4 @@ func exitOnErr(err error) {
 		logger.Error().Err(err).Msg(err.Error())
 		os.Exit(1)
 	}
-}
-
-func buildNotifier() notify.Notifier {
-	var notifiers []notify.Notifier
-
-	if key := os.Getenv("RESEND_API_KEY"); key != "" {
-		from := os.Getenv("EMAIL_FROM")
-		if from == "" {
-			from = "bookings@reformbarber.co.uk"
-		}
-		notifiers = append(notifiers, notify.NewEmailNotifier(key, from, "RE:FORM"))
-	}
-
-	if sid := os.Getenv("TWILIO_ACCOUNT_SID"); sid != "" {
-		notifiers = append(notifiers, notify.NewSMSNotifier(
-			sid,
-			mustEnv("TWILIO_AUTH_TOKEN"),
-			mustEnv("TWILIO_FROM_NUMBER"),
-		))
-	}
-
-	if len(notifiers) == 0 {
-		slog.Warn("no notification providers configured — using noop")
-		return notify.Noop{}
-	}
-	return notify.NewMulti(notifiers...)
-}
-
-func mustEnv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		slog.Error("required env var not set", "key", key)
-		os.Exit(1)
-	}
-	return v
 }
