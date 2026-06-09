@@ -1,0 +1,104 @@
+package main
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/reform-barber/api/internal/handler"
+	"github.com/reform-barber/api/internal/middleware"
+	"github.com/reform-barber/api/internal/notify"
+	"github.com/reform-barber/api/internal/storage"
+
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+)
+
+func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier notify.Notifier) *chi.Mux {
+	logger.Info().Msg("initialising router")
+
+	r := chi.NewRouter()
+	r.Use(chiMiddleware.Recoverer)
+	r.Use(middleware.Logger)
+	r.Use(chiMiddleware.RequestID)
+
+	// set auth so it can be applied to routes that require it
+	jwtSecret := mustEnv("JWT_SECRET")
+	authn := middleware.Authenticate(jwtSecret)
+	mustBeBarber := middleware.RequireRole("barber")
+	mustBeFounder := middleware.RequireRole("founder")
+
+	// create handlers for router
+	authH, barbersH, servicesH, productsH, bookingsH, mediaH := initHandlers(db, jwtSecret, store, notifier)
+
+	// add routes
+	r.Route("/api", func(r chi.Router) {
+		// - public routes (ones that require no auth)
+		r.Get("/barbers", barbersH.List)
+		r.Get("/services", servicesH.List)
+		r.Get("/products", productsH.List)
+		r.Get("/availability", handler.GetAvailability(db))
+		r.Get("/media/carousel", mediaH.ListCarousel)
+		r.Get("/media/gallery", mediaH.ListGallery)
+
+		// - auth routes
+		r.Post("/auth/register", authH.Register)
+		r.Post("/auth/login", authH.Login)
+		r.Post("/auth/refresh", authH.Refresh)
+		r.Post("/auth/logout", authH.Logout)
+
+		// - private routes (ones that users will need authentication to access)
+		r.Group(func(r chi.Router) {
+			r.Use(authn)
+			r.Get("/me", authH.Me)
+			r.Post("/bookings", bookingsH.Create)
+			r.Get("/me/bookings", bookingsH.ListMine)
+			r.Post("/me/bookings/{id}/cancel", bookingsH.Cancel)
+
+			// Barber diary
+			r.Group(func(r chi.Router) {
+				r.Use(mustBeBarber)
+				r.Get("/barber/appointments", bookingsH.BarberAppointments)
+			})
+
+			// Founder admin
+			r.Group(func(r chi.Router) {
+				r.Use(mustBeFounder)
+				r.Get("/founder/bookings", bookingsH.AdminListBookings)
+
+				r.Put("/founder/barbers/{id}", barbersH.Update)
+				r.Post("/founder/barbers/{id}/photo", mediaH.UploadBarberPhoto)
+
+				r.Post("/founder/services", servicesH.Create)
+				r.Put("/founder/services/{id}", servicesH.Update)
+
+				r.Post("/founder/products", productsH.Create)
+				r.Put("/founder/products/{id}", productsH.Update)
+				r.Post("/founder/products/{id}/image", mediaH.UploadProductImage)
+
+				r.Post("/founder/media/carousel", mediaH.UploadCarousel)
+				r.Post("/founder/media/gallery", mediaH.UploadGallery)
+				r.Delete("/founder/media/{id}", mediaH.Delete)
+				r.Patch("/founder/media/{id}/order", mediaH.UpdateOrder)
+			})
+		})
+	})
+
+	// handle upload (in local dev)
+	if devMode {
+		uploadsDir := mustEnv("UPLOADS_DIR")
+		r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsDir))))
+	}
+	return r
+}
+
+func initHandlers(db *pgxpool.Pool, jwtSecret string, store storage.Store, notifier notify.Notifier) (
+	*handler.AuthHandler, *handler.BarbersHandler, *handler.ServicesHandler, *handler.ProductsHandler, *handler.BookingsHandler, *handler.MediaHandler) {
+	auth := handler.NewAuthHandler(db, jwtSecret)
+	barbers := handler.NewBarbersHandler(db)
+	services := handler.NewServicesHandler(db)
+	products := handler.NewProductsHandler(db)
+	bookings := handler.NewBookingsHandler(db, notifier)
+	media := handler.NewMediaHandler(db, store)
+
+	return auth, barbers, services, products, bookings, media
+}
