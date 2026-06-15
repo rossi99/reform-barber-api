@@ -28,7 +28,7 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 	mustBeFounder := middleware.RequireRole("founder")
 
 	// create handlers for router
-	authH, barbersH, servicesH, productsH, bookingsH, mediaH := initHandlers(db, jwtSecret, store, notifier)
+	authH, barbersH, servicesH, productsH, bookingsH, mediaH := initHandlers(devMode, db, jwtSecret, store, notifier)
 
 	// add routes
 	r.Route("/api", func(r chi.Router) {
@@ -91,9 +91,9 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 	return r
 }
 
-func initHandlers(db *pgxpool.Pool, jwtSecret string, store storage.Store, notifier notify.Notifier) (
+func initHandlers(devMode bool, db *pgxpool.Pool, jwtSecret string, store storage.Store, notifier notify.Notifier) (
 	*handler.AuthHandler, *handler.BarbersHandler, *handler.ServicesHandler, *handler.ProductsHandler, *handler.BookingsHandler, *handler.MediaHandler) {
-	auth := handler.NewAuthHandler(db, jwtSecret)
+	auth := handler.NewAuthHandler(db, jwtSecret, devMode)
 	barbers := handler.NewBarbersHandler(db)
 	services := handler.NewServicesHandler(db)
 	products := handler.NewProductsHandler(db)

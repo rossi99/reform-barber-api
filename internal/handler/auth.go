@@ -17,10 +17,11 @@ import (
 type AuthHandler struct {
 	q         *db.Queries
 	jwtSecret string
+	devMode   bool
 }
 
-func NewAuthHandler(pool *pgxpool.Pool, jwtSecret string) *AuthHandler {
-	return &AuthHandler{q: db.New(pool), jwtSecret: jwtSecret}
+func NewAuthHandler(pool *pgxpool.Pool, jwtSecret string, devMode bool) *AuthHandler {
+	return &AuthHandler{q: db.New(pool), jwtSecret: jwtSecret, devMode: devMode}
 }
 
 type registerRequest struct {
@@ -77,7 +78,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.issueTokens(r, user.ID, user.Role, nil)
+	resp, err := h.issueTokens(w, r, user.ID, user.Role, nil)
 	if err != nil {
 		respond.Error(w, http.StatusInternalServerError, "could not issue tokens")
 		return
@@ -110,7 +111,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp, err := h.issueTokens(r, user.ID, user.Role, barberID)
+	resp, err := h.issueTokens(w, r, user.ID, user.Role, barberID)
 	if err != nil {
 		respond.Error(w, http.StatusInternalServerError, "could not issue tokens")
 		return
@@ -119,15 +120,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		RefreshToken string `json:"refreshToken"`
+	tok := auth.ReadRefreshCookie(r)
+	if tok == "" {
+		var body struct {
+			RefreshToken string `json:"refreshToken"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		tok = body.RefreshToken
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.RefreshToken == "" {
+	if tok == "" {
 		respond.Error(w, http.StatusBadRequest, "refreshToken required")
 		return
 	}
 
-	hash := auth.HashRefreshToken(body.RefreshToken)
+	hash := auth.HashRefreshToken(tok)
 	stored, err := h.q.GetRefreshToken(r.Context(), hash)
 	if err != nil {
 		respond.Error(w, http.StatusUnauthorized, "invalid or expired refresh token")
@@ -150,7 +156,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp, err := h.issueTokens(r, user.ID, user.Role, barberID)
+	resp, err := h.issueTokens(w, r, user.ID, user.Role, barberID)
 	if err != nil {
 		respond.Error(w, http.StatusInternalServerError, "could not issue tokens")
 		return
@@ -159,13 +165,18 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		RefreshToken string `json:"refreshToken"`
+	tok := auth.ReadRefreshCookie(r)
+	if tok == "" {
+		var body struct {
+			RefreshToken string `json:"refreshToken"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		tok = body.RefreshToken
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.RefreshToken != "" {
-		hash := auth.HashRefreshToken(body.RefreshToken)
-		_ = h.q.DeleteRefreshToken(r.Context(), hash)
+	if tok != "" {
+		_ = h.q.DeleteRefreshToken(r.Context(), auth.HashRefreshToken(tok))
 	}
+	auth.ClearRefreshCookie(w, h.devMode)
 	respond.NoContent(w)
 }
 
@@ -185,7 +196,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *AuthHandler) issueTokens(r *http.Request, userID uuid.UUID, role string, barberID *uuid.UUID) (tokenResponse, error) {
+func (h *AuthHandler) issueTokens(w http.ResponseWriter, r *http.Request, userID uuid.UUID, role string, barberID *uuid.UUID) (tokenResponse, error) {
 	accessToken, err := auth.IssueAccessToken(h.jwtSecret, userID, role, barberID)
 	if err != nil {
 		return tokenResponse{}, err
@@ -205,5 +216,6 @@ func (h *AuthHandler) issueTokens(r *http.Request, userID uuid.UUID, role string
 		return tokenResponse{}, err
 	}
 
+	auth.SetRefreshCookie(w, raw, h.devMode)
 	return tokenResponse{AccessToken: accessToken, RefreshToken: raw}, nil
 }
