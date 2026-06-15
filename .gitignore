@@ -2,3 +2,4 @@
 tilt_modules/
 uploads/
 .env
+.dev-passwords
