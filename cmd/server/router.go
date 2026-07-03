@@ -68,8 +68,10 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 				r.Put("/founder/barbers/{id}", barbersH.Update)
 				r.Post("/founder/barbers/{id}/photo", mediaH.UploadBarberPhoto)
 
+				r.Get("/founder/services", servicesH.ListAll)
 				r.Post("/founder/services", servicesH.Create)
 				r.Put("/founder/services/{id}", servicesH.Update)
+				r.Patch("/founder/services/{id}/publish", servicesH.Publish)
 
 				r.Post("/founder/products", productsH.Create)
 				r.Put("/founder/products/{id}", productsH.Update)

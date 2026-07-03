@@ -25,6 +25,7 @@ type Service struct {
 	Description  string    `json:"description"`
 	DurationMins int32     `json:"duration"`
 	PricePence   int32     `json:"price"`
+	Published    bool      `json:"published"`
 }
 
 type Product struct {
