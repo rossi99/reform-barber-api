@@ -69,6 +69,39 @@ func (q *Queries) GetServiceByID(ctx context.Context, id uuid.UUID) (Service, er
 	return i, err
 }
 
+const listAllServices = `-- name: ListAllServices :many
+SELECT id, num, name, name_html, description, duration_mins, price_pence, active FROM services ORDER BY num ASC
+`
+
+func (q *Queries) ListAllServices(ctx context.Context) ([]Service, error) {
+	rows, err := q.db.Query(ctx, listAllServices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Service{}
+	for rows.Next() {
+		var i Service
+		if err := rows.Scan(
+			&i.ID,
+			&i.Num,
+			&i.Name,
+			&i.NameHtml,
+			&i.Description,
+			&i.DurationMins,
+			&i.PricePence,
+			&i.Active,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServices = `-- name: ListServices :many
 SELECT id, num, name, name_html, description, duration_mins, price_pence, active FROM services WHERE active = true ORDER BY num ASC
 `
@@ -100,6 +133,31 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setServicePublished = `-- name: SetServicePublished :one
+UPDATE services SET active = $2 WHERE id = $1 RETURNING id, num, name, name_html, description, duration_mins, price_pence, active
+`
+
+type SetServicePublishedParams struct {
+	ID     uuid.UUID `json:"id"`
+	Active bool      `json:"active"`
+}
+
+func (q *Queries) SetServicePublished(ctx context.Context, arg SetServicePublishedParams) (Service, error) {
+	row := q.db.QueryRow(ctx, setServicePublished, arg.ID, arg.Active)
+	var i Service
+	err := row.Scan(
+		&i.ID,
+		&i.Num,
+		&i.Name,
+		&i.NameHtml,
+		&i.Description,
+		&i.DurationMins,
+		&i.PricePence,
+		&i.Active,
+	)
+	return i, err
 }
 
 const updateService = `-- name: UpdateService :one

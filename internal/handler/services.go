@@ -36,6 +36,29 @@ func (h *ServicesHandler) List(w http.ResponseWriter, r *http.Request) {
 			Description:  derefStr(s.Description),
 			DurationMins: s.DurationMins,
 			PricePence:   s.PricePence,
+			Published:    s.Active,
+		})
+	}
+	respond.OK(w, out)
+}
+
+func (h *ServicesHandler) ListAll(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.q.ListAllServices(r.Context())
+	if err != nil {
+		respond.Error(w, http.StatusInternalServerError, "could not load services")
+		return
+	}
+	out := make([]model.Service, 0, len(rows))
+	for _, s := range rows {
+		out = append(out, model.Service{
+			ID:           s.ID,
+			Num:          derefStr(s.Num),
+			Name:         s.Name,
+			NameHTML:     derefStr(s.NameHtml),
+			Description:  derefStr(s.Description),
+			DurationMins: s.DurationMins,
+			PricePence:   s.PricePence,
+			Published:    s.Active,
 		})
 	}
 	respond.OK(w, out)
@@ -71,6 +94,39 @@ func (h *ServicesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond.Created(w, svc)
+}
+
+func (h *ServicesHandler) Publish(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		respond.Error(w, http.StatusBadRequest, "invalid service id")
+		return
+	}
+	var body struct {
+		Published bool `json:"published"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respond.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	svc, err := h.q.SetServicePublished(r.Context(), db.SetServicePublishedParams{
+		ID:     id,
+		Active: body.Published,
+	})
+	if err != nil {
+		respond.Error(w, http.StatusNotFound, "service not found")
+		return
+	}
+	respond.OK(w, model.Service{
+		ID:           svc.ID,
+		Num:          derefStr(svc.Num),
+		Name:         svc.Name,
+		NameHTML:     derefStr(svc.NameHtml),
+		Description:  derefStr(svc.Description),
+		DurationMins: svc.DurationMins,
+		PricePence:   svc.PricePence,
+		Published:    svc.Active,
+	})
 }
 
 func (h *ServicesHandler) Update(w http.ResponseWriter, r *http.Request) {
