@@ -22,7 +22,7 @@ func (s *SMSNotifier) BookingConfirmed(ctx context.Context, p BookingPayload) er
 	if p.CustomerPhone == "" {
 		return nil
 	}
-	msg := fmt.Sprintf("RE:FORM: Confirmed — %s with %s on %s at %s. Ref: %s", p.ServiceName, p.BarberName, p.Date, p.Time, p.Reference)
+	msg := fmt.Sprintf("RE:FORM: Confirmed - %s with %s on %s at %s. Ref: %s", p.ServiceName, p.BarberName, p.Date, p.Time, p.Reference)
 	return s.send(ctx, p.CustomerPhone, msg)
 }
 
@@ -30,7 +30,7 @@ func (s *SMSNotifier) AppointmentReminder(ctx context.Context, p BookingPayload)
 	if p.CustomerPhone == "" {
 		return nil
 	}
-	msg := fmt.Sprintf("RE:FORM: Reminder — %s with %s tomorrow at %s. Ref: %s", p.ServiceName, p.BarberName, p.Time, p.Reference)
+	msg := fmt.Sprintf("RE:FORM: Reminder - %s with %s tomorrow at %s. Ref: %s", p.ServiceName, p.BarberName, p.Time, p.Reference)
 	return s.send(ctx, p.CustomerPhone, msg)
 }
 

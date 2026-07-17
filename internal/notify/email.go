@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-const confirmationTmpl = `RE:FORM — Booking Confirmed
+const confirmationTmpl = `RE:FORM - Booking Confirmed
 
 Hi {{.CustomerName}},
 
@@ -45,12 +45,12 @@ func (e *EmailNotifier) BookingConfirmed(ctx context.Context, p BookingPayload) 
 	if err := e.tmpl.Execute(&buf, p); err != nil {
 		return err
 	}
-	return e.send(ctx, p.CustomerEmail, "RE:FORM — Booking Confirmed · "+p.Reference, buf.String())
+	return e.send(ctx, p.CustomerEmail, "RE:FORM - Booking Confirmed · "+p.Reference, buf.String())
 }
 
 func (e *EmailNotifier) AppointmentReminder(ctx context.Context, p BookingPayload) error {
 	body := fmt.Sprintf("Reminder: your appointment with %s is tomorrow at %s. Ref: %s", p.BarberName, p.Time, p.Reference)
-	return e.send(ctx, p.CustomerEmail, "RE:FORM — Appointment Tomorrow", body)
+	return e.send(ctx, p.CustomerEmail, "RE:FORM - Appointment Tomorrow", body)
 }
 
 func (e *EmailNotifier) send(ctx context.Context, to, subject, text string) error {

@@ -25,11 +25,12 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 	// set auth so it can be applied to routes that require it
 	jwtSecret := mustEnv("JWT_SECRET")
 	authn := middleware.Authenticate(jwtSecret)
-	mustBeBarber := middleware.RequireRole(auth.RoleBarber)
+
 	// Admin is a super-user above founder: it inherits every founder
 	// (shop-management) route in addition to its own admin-only routes.
-	mustBeFounderOrAdmin := middleware.RequireRole(auth.RoleFounder, auth.RoleAdmin)
 	mustBeAdmin := middleware.RequireRole(auth.RoleAdmin)
+	mustBeFounderOrAdmin := middleware.RequireRole(auth.RoleFounder, auth.RoleAdmin)
+	mustBeBarber := middleware.RequireRole(auth.RoleBarber)
 
 	// create handlers for router
 	authH, barbersH, servicesH, productsH, bookingsH, mediaH, adminH := initHandlers(devMode, db, jwtSecret, store, notifier)
@@ -64,7 +65,7 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 				r.Get("/barber/appointments", bookingsH.BarberAppointments)
 			})
 
-			// Founder admin — also reachable by admin, since admin is a
+			// Founder admin - also reachable by admin, since admin is a
 			// super-user that inherits all shop-management capabilities.
 			r.Group(func(r chi.Router) {
 				r.Use(mustBeFounderOrAdmin)

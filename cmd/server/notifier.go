@@ -34,7 +34,7 @@ func buildNotifier() notify.Notifier {
 	}
 
 	if len(notifiers) == 0 {
-		logger.Warn().Msg("no notification providers configured — using noop")
+		logger.Warn().Msg("no notification providers configured - using noop")
 		return notify.Noop{}
 	}
 	return notify.NewMulti(notifiers...)

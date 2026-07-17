@@ -7,13 +7,13 @@ INSERT INTO services (num, name, name_html, description, duration_mins, price_pe
    'Most booked. Skin fades, tapers and modern styles, finished clean and designed to sit well as it grows out.',
    30, 2500, true),
   ('02', 'Precision Cut + Beard', 'Precision Cut <span class="plus">+</span> Beard',
-   'Skin fades, tapers and modern styles with beard work. Detailed, balanced finish — designed to sit well as it grows.',
+   'Skin fades, tapers and modern styles with beard work. Detailed, balanced finish - designed to sit well as it grows.',
    40, 3000, true),
   ('03', 'Classic + Beard', 'Classic <span class="plus">+</span> Beard',
-   'A quick, simple cut with beard work included. Clipper grades or basic scissor work — no skin fades or tight tapers.',
+   'A quick, simple cut with beard work included. Clipper grades or basic scissor work - no skin fades or tight tapers.',
    30, 2500, true),
   ('04', 'Classic Cut', 'Classic Cut',
-   'Grades 0.5 — 8. A quick, simple, no fuss cut. Clipper with basic scissor work on top; for fades or tight tapers, please book a Precision Cut.',
+   'Grades 0.5 - 8. A quick, simple, no fuss cut. Clipper with basic scissor work on top; for fades or tight tapers, please book a Precision Cut.',
    20, 2000, true),
   ('05', 'Under 16', 'Under 16',
    'Standard cuts only. Skin fades must be booked as a Precision Cut.',
@@ -22,7 +22,7 @@ INSERT INTO services (num, name, name_html, description, duration_mins, price_pe
    'A standard cut for the regulars who''ve been sitting in chairs longer than we have.',
    20, 1500, true);
 
--- Nigel — founder
+-- Nigel - founder
 INSERT INTO users (id, email, password_hash, first_name, role)
 VALUES (
   '11111111-1111-1111-1111-111111111101',
@@ -54,7 +54,7 @@ INSERT INTO barber_schedules (barber_id, dow, open_time, close_time) VALUES
 
 -- Dev accounts matching .dev-passwords, so every role is testable locally.
 
--- Admin — site owner/administrator. No barber profile; books like a customer.
+-- Admin - site owner/administrator. No barber profile; books like a customer.
 -- Keyed ON CONFLICT(email) so if this address was already registered through
 -- the live app (e.g. the site owner signing up as a normal customer first),
 -- we only promote its role to admin and leave the real password/name alone

@@ -447,7 +447,7 @@ type ListConfirmedBookingsForBarberDateRow struct {
 	TimeEnd   string `json:"time_end"`
 }
 
-// Confirmed bookings for a barber on a date — used by availability engine.
+// Confirmed bookings for a barber on a date - used by availability engine.
 func (q *Queries) ListConfirmedBookingsForBarberDate(ctx context.Context, arg ListConfirmedBookingsForBarberDateParams) ([]ListConfirmedBookingsForBarberDateRow, error) {
 	rows, err := q.db.Query(ctx, listConfirmedBookingsForBarberDate, arg.BarberID, arg.Date)
 	if err != nil {

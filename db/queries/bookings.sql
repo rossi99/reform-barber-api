@@ -33,7 +33,7 @@ JOIN services s ON s.id = b.service_id
 WHERE b.barber_id = $1 AND b.date BETWEEN $2 AND $3 AND b.status != 'cancelled'
 ORDER BY b.date ASC, b.time_start ASC;
 
--- Confirmed bookings for a barber on a date — used by availability engine.
+-- Confirmed bookings for a barber on a date - used by availability engine.
 -- name: ListConfirmedBookingsForBarberDate :many
 SELECT time_start, time_end FROM bookings
 WHERE barber_id = $1 AND date = $2 AND status = 'confirmed';
