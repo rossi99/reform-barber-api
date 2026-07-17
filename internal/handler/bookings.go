@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/reform-barber/api/internal/auth"
 	"github.com/reform-barber/api/internal/db"
 	"github.com/reform-barber/api/internal/middleware"
 	"github.com/reform-barber/api/internal/model"
@@ -169,7 +170,8 @@ func (h *BookingsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 	claims := middleware.ClaimsFromCtx(r.Context())
 	ownerID, valid := pgconv.FromUUID(booking.UserID)
-	if (!valid || ownerID != userID) && claims.Role != "founder" {
+	isManager := claims.Role == auth.RoleFounder || claims.Role == auth.RoleAdmin
+	if (!valid || ownerID != userID) && !isManager {
 		respond.Error(w, http.StatusForbidden, "not your booking")
 		return
 	}

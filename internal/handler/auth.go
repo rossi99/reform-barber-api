@@ -70,7 +70,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		FirstName:    &req.FirstName,
 		LastName:     &req.LastName,
 		Phone:        &req.Phone,
-		Role:         "customer",
+		Role:         auth.RoleCustomer,
 		ReminderOpt:  req.ReminderOpt,
 	})
 	if err != nil {
@@ -104,7 +104,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var barberID *uuid.UUID
-	if user.Role == "barber" || user.Role == "founder" {
+	if user.Role == auth.RoleBarber || user.Role == auth.RoleFounder {
 		b, err := h.q.GetBarberByUserID(r.Context(), user.ID)
 		if err == nil {
 			barberID = &b.ID
@@ -149,7 +149,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var barberID *uuid.UUID
-	if user.Role == "barber" || user.Role == "founder" {
+	if user.Role == auth.RoleBarber || user.Role == auth.RoleFounder {
 		b, err := h.q.GetBarberByUserID(r.Context(), user.ID)
 		if err == nil {
 			barberID = &b.ID

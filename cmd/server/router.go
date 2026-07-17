@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/reform-barber/api/internal/auth"
 	"github.com/reform-barber/api/internal/handler"
 	"github.com/reform-barber/api/internal/middleware"
 	"github.com/reform-barber/api/internal/notify"
@@ -24,11 +25,14 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 	// set auth so it can be applied to routes that require it
 	jwtSecret := mustEnv("JWT_SECRET")
 	authn := middleware.Authenticate(jwtSecret)
-	mustBeBarber := middleware.RequireRole("barber")
-	mustBeFounder := middleware.RequireRole("founder")
+	mustBeBarber := middleware.RequireRole(auth.RoleBarber)
+	// Admin is a super-user above founder: it inherits every founder
+	// (shop-management) route in addition to its own admin-only routes.
+	mustBeFounderOrAdmin := middleware.RequireRole(auth.RoleFounder, auth.RoleAdmin)
+	mustBeAdmin := middleware.RequireRole(auth.RoleAdmin)
 
 	// create handlers for router
-	authH, barbersH, servicesH, productsH, bookingsH, mediaH := initHandlers(devMode, db, jwtSecret, store, notifier)
+	authH, barbersH, servicesH, productsH, bookingsH, mediaH, adminH := initHandlers(devMode, db, jwtSecret, store, notifier)
 
 	// add routes
 	r.Route("/api", func(r chi.Router) {
@@ -60,9 +64,10 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 				r.Get("/barber/appointments", bookingsH.BarberAppointments)
 			})
 
-			// Founder admin
+			// Founder admin — also reachable by admin, since admin is a
+			// super-user that inherits all shop-management capabilities.
 			r.Group(func(r chi.Router) {
-				r.Use(mustBeFounder)
+				r.Use(mustBeFounderOrAdmin)
 				r.Get("/founder/bookings", bookingsH.AdminListBookings)
 
 				r.Put("/founder/barbers/{id}", barbersH.Update)
@@ -82,6 +87,14 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 				r.Delete("/founder/media/{id}", mediaH.Delete)
 				r.Patch("/founder/media/{id}/order", mediaH.UpdateOrder)
 			})
+
+			// Admin-only: user/role management and site-wide analytics.
+			r.Group(func(r chi.Router) {
+				r.Use(mustBeAdmin)
+				r.Get("/admin/users", adminH.ListUsers)
+				r.Patch("/admin/users/{id}/role", adminH.UpdateUserRole)
+				r.Get("/admin/stats", adminH.Stats)
+			})
 		})
 	})
 
@@ -94,13 +107,14 @@ func initRouter(devMode bool, db *pgxpool.Pool, store storage.Store, notifier no
 }
 
 func initHandlers(devMode bool, db *pgxpool.Pool, jwtSecret string, store storage.Store, notifier notify.Notifier) (
-	*handler.AuthHandler, *handler.BarbersHandler, *handler.ServicesHandler, *handler.ProductsHandler, *handler.BookingsHandler, *handler.MediaHandler) {
-	auth := handler.NewAuthHandler(db, jwtSecret, devMode)
+	*handler.AuthHandler, *handler.BarbersHandler, *handler.ServicesHandler, *handler.ProductsHandler, *handler.BookingsHandler, *handler.MediaHandler, *handler.AdminHandler) {
+	authH := handler.NewAuthHandler(db, jwtSecret, devMode)
 	barbers := handler.NewBarbersHandler(db)
 	services := handler.NewServicesHandler(db)
 	products := handler.NewProductsHandler(db)
 	bookings := handler.NewBookingsHandler(db, notifier)
 	media := handler.NewMediaHandler(db, store)
+	admin := handler.NewAdminHandler(db)
 
-	return auth, barbers, services, products, bookings, media
+	return authH, barbers, services, products, bookings, media, admin
 }

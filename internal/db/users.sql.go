@@ -9,7 +9,19 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countUsersByRole = `-- name: CountUsersByRole :one
+SELECT COUNT(*) FROM users WHERE role = $1
+`
+
+func (q *Queries) CountUsersByRole(ctx context.Context, role string) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersByRole, role)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, first_name, last_name, phone, role, reminder_opt)
@@ -92,6 +104,50 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, email, first_name, last_name, phone, role, created_at
+FROM users
+ORDER BY created_at DESC
+`
+
+type ListUsersRow struct {
+	ID        uuid.UUID          `json:"id"`
+	Email     string             `json:"email"`
+	FirstName *string            `json:"first_name"`
+	LastName  *string            `json:"last_name"`
+	Phone     *string            `json:"phone"`
+	Role      string             `json:"role"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.Query(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersRow{}
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.FirstName,
+			&i.LastName,
+			&i.Phone,
+			&i.Role,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
